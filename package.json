@@ -1,0 +1,34 @@
+{
+  "name": "sitc-graduation-clearance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SITC graduation application, audit, and clearance automation system.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run start:dev -w @gtcs/api",
+    "dev:web": "npm run dev -w @gtcs/web",
+    "build": "npm run build --workspaces --if-present",
+    "build:api": "npm run build -w @gtcs/api",
+    "build:web": "npm run build -w @gtcs/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:api": "npm run test -w @gtcs/api",
+    "test:api:e2e": "npm run test:e2e -w @gtcs/api",
+    "test:web": "npm run test -w @gtcs/web",
+    "prisma:generate": "npm run prisma:generate -w @gtcs/api",
+    "prisma:migrate": "npm run prisma:migrate -w @gtcs/api",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  }
+}

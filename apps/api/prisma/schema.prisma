@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum RoleName {
+  STUDENT
+  PROGRAM_CHAIR
+  DEAN
+  BURSARY_OFFICER
+  REGISTRY_OFFICER
+  PROVOST
+  ADMIN
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  RETURNED_TO_STUDENT
+  BURSARY_PENDING
+  BURSARY_NOT_CLEARED
+  BURSARY_CLEARED
+  CHAIR_REVIEW
+  CHAIR_NOT_CLEARED
+  CHAIR_CLEARED
+  DEAN_REVIEW
+  DEAN_NOT_CLEARED
+  DEAN_CLEARED
+  REGISTRY_INTAKE_REVIEW
+  WAITING_FOR_FINAL_GRADES
+  FINAL_REGISTRY_REVIEW
+  PROVOST_REVIEW
+  COMPLETED
+  NOT_CLEARED
+  WITHDRAWN
+}
+
+enum ClearanceStage {
+  BURSARY
+  PROGRAM_CHAIR
+  DEAN
+  REGISTRY_INTAKE
+  FINAL_REGISTRY
+  PROVOST
+}
+
+enum ClearanceDecision {
+  PENDING
+  CLEARED
+  NOT_CLEARED
+  RETURNED
+}
+
+enum DocumentType {
+  JAMB_ADMISSION_LETTER
+  JAMB_RESULT_SLIP
+  NIN_SLIP
+  UNOFFICIAL_TRANSCRIPT
+  SUPPORTING_DOCUMENT
+}
+
+enum RequirementKind {
+  EXACT_COURSE
+  COURSE_ALTERNATIVE
+  CREDIT_BUCKET
+  CATEGORY_BUCKET
+  ELECTIVE_BUCKET
+  FREE_ELECTIVE_BUCKET
+  EXCLUSION_RULE
+}
+
+enum CourseStatus {
+  COMPLETED
+  IN_PROGRESS
+  PLANNED
+  FAILED
+  TRANSFERRED
+}
+
+model User {
+  id             String            @id @default(cuid())
+  email          String            @unique
+  name           String?
+  role           RoleName          @default(STUDENT)
+  studentProfile StudentProfile?
+  approvals      ClearanceTask[]   @relation("ClearanceActor")
+  comments       Comment[]
+  auditLogs      AuditLog[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model StudentProfile {
+  id                    String                  @id @default(cuid())
+  userId                String                  @unique
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentId             String                  @unique
+  firstName             String
+  middleName            String?
+  lastName              String
+  school                String                  @default("School of Information Technology and Communication")
+  programId             String?
+  program               Program?                @relation(fields: [programId], references: [id])
+  catalogYearId         String?
+  catalogYear           CatalogYear?            @relation(fields: [catalogYearId], references: [id])
+  concentration         String?
+  minor                 String?
+  currentGpa            Decimal?                @db.Decimal(3, 2)
+  phone                 String?
+  shippingAddress       String?
+  parentGuardianDetails Json?
+  transcriptCourses     TranscriptCourse[]
+  applications          GraduationApplication[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+}
+
+model AcademicTerm {
+  id           String                  @id @default(cuid())
+  name         String                  @unique
+  startsAt     DateTime?
+  endsAt       DateTime?
+  deadlineAt   DateTime?
+  applications GraduationApplication[]
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+}
+
+model CatalogYear {
+  id                  String               @id @default(cuid())
+  label               String               @unique
+  programs            Program[]
+  studentProfiles     StudentProfile[]
+  programRequirements ProgramRequirement[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+}
+
+model Program {
+  id                  String               @id @default(cuid())
+  code                String
+  name                String
+  degreeName          String
+  catalogYearId       String
+  catalogYear         CatalogYear          @relation(fields: [catalogYearId], references: [id], onDelete: Cascade)
+  minimumCredits      Int
+  minimumGpa          Decimal              @default(2.00) @db.Decimal(3, 2)
+  studentProfiles     StudentProfile[]
+  programRequirements ProgramRequirement[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@unique([code, catalogYearId])
+}
+
+model Course {
+  id                String                    @id @default(cuid())
+  code              String                    @unique
+  title             String
+  credits           Int
+  category          String?
+  transcriptCourses TranscriptCourse[]
+  requirementLinks  RequirementCourseOption[]
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+}
+
+model ProgramRequirement {
+  id                  String                    @id @default(cuid())
+  programId           String
+  program             Program                   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  catalogYearId       String
+  catalogYear         CatalogYear               @relation(fields: [catalogYearId], references: [id], onDelete: Cascade)
+  kind                RequirementKind
+  name                String
+  description         String?
+  creditsRequired     Int?
+  minimumCourses      Int?
+  sortOrder           Int                       @default(0)
+  metadata            Json?
+  courseOptions       RequirementCourseOption[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+}
+
+model RequirementCourseOption {
+  id            String             @id @default(cuid())
+  requirementId String
+  requirement   ProgramRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  courseId      String
+  course        Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt     DateTime           @default(now())
+
+  @@unique([requirementId, courseId])
+}
+
+model TranscriptCourse {
+  id               String         @id @default(cuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  courseId         String?
+  course           Course?        @relation(fields: [courseId], references: [id])
+  externalCode     String?
+  externalTitle    String?
+  term             String?
+  credits          Int
+  grade            String?
+  status           CourseStatus   @default(COMPLETED)
+  metadata         Json?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model GraduationApplication {
+  id               String            @id @default(cuid())
+  studentProfileId String
+  studentProfile   StudentProfile    @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  termId           String
+  term             AcademicTerm      @relation(fields: [termId], references: [id])
+  status           ApplicationStatus @default(DRAFT)
+  submittedAt      DateTime?
+  openErpChecks    Json?
+  eligibility      Json?
+  finalGpa         Decimal?          @db.Decimal(3, 2)
+  degreeHonors     String?
+  completionTerm   String?
+  surveyResponse   SurveyResponse?
+  documents        DocumentUpload[]
+  clearanceTasks   ClearanceTask[]
+  comments         Comment[]
+  auditLogs        AuditLog[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model SurveyResponse {
+  id            String                @id @default(cuid())
+  applicationId String                @unique
+  application   GraduationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  answers       Json
+  submittedAt   DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+}
+
+model DocumentUpload {
+  id             String                @id @default(cuid())
+  applicationId  String
+  application    GraduationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type           DocumentType
+  bucket         String
+  storageKey     String
+  originalName   String?
+  mimeType       String?
+  sizeBytes      Int?
+  verifiedAt     DateTime?
+  verifiedById   String?
+  verification   Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@unique([applicationId, type, storageKey])
+}
+
+model ClearanceTask {
+  id            String                @id @default(cuid())
+  applicationId String
+  application   GraduationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  stage         ClearanceStage
+  decision      ClearanceDecision     @default(PENDING)
+  assignedToId  String?
+  assignedTo    User?                 @relation("ClearanceActor", fields: [assignedToId], references: [id])
+  remarks       String?
+  decidedAt     DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@unique([applicationId, stage])
+}
+
+model Comment {
+  id            String                @id @default(cuid())
+  applicationId String
+  application   GraduationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User                  @relation(fields: [authorId], references: [id])
+  body          String
+  createdAt     DateTime              @default(now())
+}
+
+model AuditLog {
+  id            String                 @id @default(cuid())
+  applicationId String?
+  application   GraduationApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  actorId       String?
+  actor         User?                  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  entityType    String
+  entityId      String?
+  action        String
+  metadata      Json?
+  createdAt     DateTime               @default(now())
+}
