@@ -18,6 +18,10 @@ packages/**/.env.*
 *.p12
 *.pfx
 
+# Markdown docs
+*.md
+!README.md
+
 # Build output
 dist/
 build/
