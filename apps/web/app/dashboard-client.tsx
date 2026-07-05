@@ -54,7 +54,11 @@ const initialForm: DraftForm = {
   currentGpa: '',
 };
 
-export function DashboardClient() {
+type DashboardClientProps = {
+  accessToken?: string;
+};
+
+export function DashboardClient({ accessToken }: DashboardClientProps) {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [applications, setApplications] = useState<ApplicationResponse[]>([]);
   const [form, setForm] = useState<DraftForm>(initialForm);
@@ -77,9 +81,13 @@ export function DashboardClient() {
     setLoading(true);
 
     try {
+      const requestInit: RequestInit = {
+        cache: 'no-store',
+        headers: accessToken ? { authorization: `Bearer ${accessToken}` } : undefined,
+      };
       const [summaryResponse, applicationsResponse] = await Promise.all([
-        fetch(`${apiBaseUrl}/dashboard/summary`, { cache: 'no-store' }),
-        fetch(`${apiBaseUrl}/applications`, { cache: 'no-store' }),
+        fetch(`${apiBaseUrl}/dashboard/summary`, requestInit),
+        fetch(`${apiBaseUrl}/applications`, requestInit),
       ]);
 
       if (!summaryResponse.ok || !applicationsResponse.ok) {
@@ -102,7 +110,10 @@ export function DashboardClient() {
     try {
       const response = await fetch(`${apiBaseUrl}/applications/draft`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({
           ...form,
           currentGpa: form.currentGpa ? Number(form.currentGpa) : undefined,
@@ -125,7 +136,7 @@ export function DashboardClient() {
 
   useEffect(() => {
     void loadDashboard();
-  }, []);
+  }, [accessToken]);
 
   return (
     <>

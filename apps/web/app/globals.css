@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  background: #f5f7fb;
-  color: #1d2433;
+  background: #f6faf7;
+  color: #17194f;
 }
 
 * {
@@ -15,9 +15,11 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(15, 118, 110, 0.08), transparent 280px),
-    #f5f7fb;
-  color: #1d2433;
+    linear-gradient(180deg, rgba(244, 250, 245, 0.95), rgba(255, 255, 255, 0.96) 42%),
+    #f6faf7;
+  color: #17194f;
+  font-family: var(--font-sans), system-ui, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -25,4 +27,9 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+button.bg-spruce,
+a.bg-spruce {
+  border-radius: 999px;
 }

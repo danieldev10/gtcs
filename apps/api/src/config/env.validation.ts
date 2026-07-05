@@ -7,6 +7,10 @@ const envSchema = z.object({
   API_PREFIX: z.string().min(1).default('api'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
+  AUTH_JWT_SECRET: z.string().min(32).default('dev-only-change-this-auth-secret-before-production'),
+  AUTH_ACCESS_TOKEN_EXPIRES_SECONDS: z.coerce.number().int().positive().default(604800),
+  AUTH_EMAIL_VERIFICATION_EXPIRES_HOURS: z.coerce.number().int().positive().default(24),
+
   DATABASE_URL: z.string().optional(),
   DIRECT_URL: z.string().optional(),
 
@@ -34,6 +38,13 @@ export function validateEnv(config: Record<string, unknown>) {
 
   if (!parsed.success) {
     throw new Error(`Invalid environment configuration: ${parsed.error.message}`);
+  }
+
+  if (
+    parsed.data.NODE_ENV === 'production' &&
+    parsed.data.AUTH_JWT_SECRET === 'dev-only-change-this-auth-secret-before-production'
+  ) {
+    throw new Error('AUTH_JWT_SECRET must be set to a strong unique value in production.');
   }
 
   return parsed.data;

@@ -60,6 +60,7 @@ enum DocumentType {
   JAMB_ADMISSION_LETTER
   JAMB_RESULT_SLIP
   NIN_SLIP
+  CREDIT_AUDIT_SHEET
   UNOFFICIAL_TRANSCRIPT
   SUPPORTING_DOCUMENT
 }
@@ -83,41 +84,62 @@ enum CourseStatus {
 }
 
 model User {
-  id             String            @id @default(cuid())
-  email          String            @unique
-  name           String?
-  role           RoleName          @default(STUDENT)
-  studentProfile StudentProfile?
-  approvals      ClearanceTask[]   @relation("ClearanceActor")
-  comments       Comment[]
-  auditLogs      AuditLog[]
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  id                      String                   @id @default(cuid())
+  email                   String                   @unique
+  passwordHash            String?
+  name                    String?
+  role                    RoleName                 @default(STUDENT)
+  emailVerifiedAt         DateTime?
+  lastLoginAt             DateTime?
+  studentProfile          StudentProfile?
+  emailVerificationTokens EmailVerificationToken[]
+  approvals               ClearanceTask[]          @relation("ClearanceActor")
+  comments                Comment[]
+  auditLogs               AuditLog[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+}
+
+model EmailVerificationToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model StudentProfile {
-  id                    String                  @id @default(cuid())
-  userId                String                  @unique
-  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  studentId             String                  @unique
-  firstName             String
-  middleName            String?
-  lastName              String
-  school                String                  @default("School of Information Technology and Communication")
-  programId             String?
-  program               Program?                @relation(fields: [programId], references: [id])
-  catalogYearId         String?
-  catalogYear           CatalogYear?            @relation(fields: [catalogYearId], references: [id])
-  concentration         String?
-  minor                 String?
-  currentGpa            Decimal?                @db.Decimal(3, 2)
-  phone                 String?
-  shippingAddress       String?
-  parentGuardianDetails Json?
-  transcriptCourses     TranscriptCourse[]
-  applications          GraduationApplication[]
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  id                     String                  @id @default(cuid())
+  userId                 String                  @unique
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studentId              String                  @unique
+  firstName              String
+  middleName             String?
+  lastName               String
+  school                 String                  @default("School of Information Technology and Communication")
+  major                  String?
+  programId              String?
+  program                Program?                @relation(fields: [programId], references: [id])
+  programTrack           String?
+  catalogYearId          String?
+  catalogYear            CatalogYear?            @relation(fields: [catalogYearId], references: [id])
+  catalogYearLabel       String?
+  expectedGraduationTerm String?
+  concentration          String?
+  minor                  String?
+  currentGpa             Decimal?                @db.Decimal(3, 2)
+  phone                  String?
+  shippingAddress        String?
+  parentGuardianDetails  Json?
+  transcriptCourses      TranscriptCourse[]
+  applications           GraduationApplication[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 }
 
 model AcademicTerm {
@@ -171,21 +193,21 @@ model Course {
 }
 
 model ProgramRequirement {
-  id                  String                    @id @default(cuid())
-  programId           String
-  program             Program                   @relation(fields: [programId], references: [id], onDelete: Cascade)
-  catalogYearId       String
-  catalogYear         CatalogYear               @relation(fields: [catalogYearId], references: [id], onDelete: Cascade)
-  kind                RequirementKind
-  name                String
-  description         String?
-  creditsRequired     Int?
-  minimumCourses      Int?
-  sortOrder           Int                       @default(0)
-  metadata            Json?
-  courseOptions       RequirementCourseOption[]
-  createdAt           DateTime                  @default(now())
-  updatedAt           DateTime                  @updatedAt
+  id              String                    @id @default(cuid())
+  programId       String
+  program         Program                   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  catalogYearId   String
+  catalogYear     CatalogYear               @relation(fields: [catalogYearId], references: [id], onDelete: Cascade)
+  kind            RequirementKind
+  name            String
+  description     String?
+  creditsRequired Int?
+  minimumCourses  Int?
+  sortOrder       Int                       @default(0)
+  metadata        Json?
+  courseOptions   RequirementCourseOption[]
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
 }
 
 model RequirementCourseOption {
@@ -217,25 +239,30 @@ model TranscriptCourse {
 }
 
 model GraduationApplication {
-  id               String            @id @default(cuid())
-  studentProfileId String
-  studentProfile   StudentProfile    @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
-  termId           String
-  term             AcademicTerm      @relation(fields: [termId], references: [id])
-  status           ApplicationStatus @default(DRAFT)
-  submittedAt      DateTime?
-  openErpChecks    Json?
-  eligibility      Json?
-  finalGpa         Decimal?          @db.Decimal(3, 2)
-  degreeHonors     String?
-  completionTerm   String?
-  surveyResponse   SurveyResponse?
-  documents        DocumentUpload[]
-  clearanceTasks   ClearanceTask[]
-  comments         Comment[]
-  auditLogs        AuditLog[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                           String            @id @default(cuid())
+  studentProfileId             String
+  studentProfile               StudentProfile    @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  termId                       String
+  term                         AcademicTerm      @relation(fields: [termId], references: [id])
+  status                       ApplicationStatus @default(DRAFT)
+  submittedAt                  DateTime?
+  nameOnCertificate            String?
+  ceremonyAttendance           String?
+  certificateMailingAddress    String?
+  studentRemarks               String?
+  studentAttestationAcceptedAt DateTime?
+  openErpChecks                Json?
+  eligibility                  Json?
+  finalGpa                     Decimal?          @db.Decimal(3, 2)
+  degreeHonors                 String?
+  completionTerm               String?
+  surveyResponse               SurveyResponse?
+  documents                    DocumentUpload[]
+  clearanceTasks               ClearanceTask[]
+  comments                     Comment[]
+  auditLogs                    AuditLog[]
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
 }
 
 model SurveyResponse {
@@ -249,20 +276,20 @@ model SurveyResponse {
 }
 
 model DocumentUpload {
-  id             String                @id @default(cuid())
-  applicationId  String
-  application    GraduationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  type           DocumentType
-  bucket         String
-  storageKey     String
-  originalName   String?
-  mimeType       String?
-  sizeBytes      Int?
-  verifiedAt     DateTime?
-  verifiedById   String?
-  verification   Json?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  id            String                @id @default(cuid())
+  applicationId String
+  application   GraduationApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          DocumentType
+  bucket        String
+  storageKey    String
+  originalName  String?
+  mimeType      String?
+  sizeBytes     Int?
+  verifiedAt    DateTime?
+  verifiedById  String?
+  verification  Json?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
   @@unique([applicationId, type, storageKey])
 }

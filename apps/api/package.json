@@ -5,6 +5,7 @@
   "description": "NestJS API for SITC graduation automation.",
   "scripts": {
     "build": "nest build",
+    "dev": "npm run start:dev",
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "lint": "tsc -p tsconfig.json --noEmit",
@@ -14,6 +15,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "seed:staff": "node scripts/seed-staff-users.mjs",
     "smoke": "node scripts/smoke-test.mjs"
   },
   "dependencies": {
@@ -25,7 +27,7 @@
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",
     "@prisma/client": "^6.8.2",
-    "nodemailer": "^8.0.10",
+    "nodemailer": "^9.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^3.25.57"

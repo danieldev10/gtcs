@@ -5,15 +5,21 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: '#1d2433',
-        mist: '#f5f7fb',
-        line: '#d9e0ec',
-        spruce: '#0f766e',
-        marigold: '#b7791f',
-        plum: '#7c3aed',
+        ink: '#17194f',
+        mist: '#f4faf5',
+        line: '#dbe8df',
+        spruce: '#00894a',
+        marigold: '#ef2d35',
+        plum: '#545a82',
+      },
+      fontFamily: {
+        sans: ['var(--font-sans)', 'system-ui', 'Helvetica Neue', 'Arial', 'sans-serif'],
+      },
+      borderRadius: {
+        pill: '999px',
       },
       boxShadow: {
-        soft: '0 10px 30px rgba(29, 36, 51, 0.08)',
+        soft: '0 10px 28px rgba(23, 25, 79, 0.1)',
       },
     },
   },

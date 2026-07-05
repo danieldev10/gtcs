@@ -34,6 +34,7 @@ npm install
 
 - `DATABASE_URL` with the Supabase pooler connection string.
 - `DIRECT_URL` with the Supabase direct database connection string.
+- `AUTH_JWT_SECRET` with a strong random value of at least 32 characters.
 - `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
 - `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`.
 - `NEXT_PUBLIC_API_BASE_URL`.
@@ -81,6 +82,12 @@ npm run test:web
 ## Current API Routes
 
 - `GET /api/health`
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `POST /api/auth/verify-email`
+- `GET /api/auth/verify-email?token=...`
+- `POST /api/auth/resend-verification`
+- `GET /api/auth/me`
 - `GET /api/dashboard/summary`
 - `GET /api/applications`
 - `POST /api/applications/draft`
@@ -100,4 +107,10 @@ Deploy the web app from the repository root with `vercel.json`, or set the Verce
 
 ## Audit Note
 
-The web app uses `next@16.3.0-canary.45` because the latest stable Next release still depends on the vulnerable nested `postcss@8.4.31`. The canary release depends on patched `postcss@8.5.10`, and `npm audit` reports zero vulnerabilities after the upgrade. Track this during Next upgrades and move back to a stable release once the stable line carries the patched dependency.
+`npm audit` reports **0 vulnerabilities**. A few advisories came from transitive dependencies that upstream packages still pin to vulnerable versions, so they are forced to patched versions via the root `overrides` block in `package.json`:
+
+- `postcss` → `^8.5.16` (Next pinned the vulnerable `8.4.31`)
+- `multer` → `^2.2.0` (`@nestjs/platform-express` pinned the vulnerable `2.1.1`)
+- `js-yaml` → `^4.2.0` (jest coverage tooling pinned the vulnerable `<=4.1.1`)
+
+`nodemailer` was also upgraded to `^9.0.1` in `apps/api` to clear a high-severity advisory. Revisit these overrides when upgrading Next, NestJS, or Jest — once a dependency ships the patched version itself, the matching override can be removed. Note: overrides only take effect after a clean reinstall (`rm -rf node_modules package-lock.json && npm install`), because npm reuses an already-satisfiable tree otherwise.
