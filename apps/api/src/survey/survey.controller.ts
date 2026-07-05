@@ -13,6 +13,12 @@ import { SurveyService } from './survey.service';
 export class SurveyController {
   constructor(private readonly surveyService: SurveyService) {}
 
+  @Get('report')
+  @RequireRoles(RoleName.REGISTRY_OFFICER, RoleName.ADMIN)
+  getSurveyReport(@CurrentUser() user: AuthenticatedUser) {
+    return this.surveyService.getSurveyReport(user);
+  }
+
   @Get('me')
   getMySurvey(@CurrentUser() user: AuthenticatedUser) {
     return this.surveyService.getMySurvey(user);

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ApplicationStatus, DocumentType, Prisma, RoleName } from '@prisma/client';
 import { z } from 'zod';
 import { AuthenticatedUser } from '../auth/auth.types';
@@ -181,9 +181,65 @@ type CurrentApplication = Prisma.GraduationApplicationGetPayload<{
   };
 }>;
 
+type SurveyReportResponse = Prisma.SurveyResponseGetPayload<{
+  include: {
+    application: {
+      include: {
+        term: true;
+        studentProfile: {
+          include: {
+            program: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
 @Injectable()
 export class SurveyService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async getSurveyReport(user: AuthenticatedUser) {
+    if (user.role !== RoleName.REGISTRY_OFFICER && user.role !== RoleName.ADMIN) {
+      throw new ForbiddenException('Only Registry can view survey reports.');
+    }
+
+    const responses = await this.prisma.surveyResponse.findMany({
+      where: {
+        submittedAt: {
+          not: null,
+        },
+        application: {
+          submittedAt: {
+            not: null,
+          },
+        },
+      },
+      orderBy: {
+        submittedAt: 'desc',
+      },
+      include: {
+        application: {
+          include: {
+            term: true,
+            studentProfile: {
+              include: {
+                program: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      generatedAt: new Date(),
+      totalResponses: responses.length,
+      questions: surveyQuestions,
+      responses: responses.map((response) => this.serializeSurveyReportResponse(response)),
+    };
+  }
 
   async getMySurvey(user: AuthenticatedUser) {
     const application = await this.getCurrentApplication(user);
@@ -334,6 +390,24 @@ export class SurveyService {
       questions: surveyQuestions,
       answers: this.normalizeAnswers(application.surveyResponse?.answers as SurveyAnswers | null),
       submittedAt: application.surveyResponse?.submittedAt ?? null,
+    };
+  }
+
+  private serializeSurveyReportResponse(response: SurveyReportResponse) {
+    const profile = response.application.studentProfile;
+
+    return {
+      id: response.id,
+      applicationId: response.applicationId,
+      submittedAt: response.submittedAt,
+      term: response.application.term.name,
+      status: response.application.status,
+      student: {
+        id: profile.studentId,
+        name: [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' '),
+        major: profile.major ?? profile.program?.name ?? 'Unassigned',
+      },
+      answers: this.normalizeAnswers(response.answers as SurveyAnswers | null),
     };
   }
 

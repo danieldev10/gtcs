@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, FileText, Loader2, LogOut, RefreshCw, X } from 'lucide-react';
+import { Download, ExternalLink, FileText, Loader2, LogOut, RefreshCw, X } from 'lucide-react';
 import { SITC_SCHOOL_NAME } from '@gtcs/shared';
 import { apiBaseUrl } from '../src/lib/config';
 import { AuthUser } from '../src/lib/auth';
@@ -82,6 +82,37 @@ type StaffDashboard = {
   queueApplications: StaffApplication[];
 };
 
+type StaffSurveyAnswerValue = string | string[] | null | undefined;
+
+type StaffSurveyQuestion = {
+  key: string;
+  label: string;
+  required: boolean;
+  type: 'select' | 'choice' | 'textarea' | 'checkboxes';
+  options?: string[];
+};
+
+type StaffSurveyResponse = {
+  id: string;
+  applicationId: string;
+  submittedAt: string | null;
+  term: string;
+  status: string;
+  student: {
+    id: string;
+    name: string;
+    major: string;
+  };
+  answers: Record<string, StaffSurveyAnswerValue>;
+};
+
+type StaffSurveyReport = {
+  generatedAt: string;
+  totalResponses: number;
+  questions: StaffSurveyQuestion[];
+  responses: StaffSurveyResponse[];
+};
+
 const statusLabels: Record<string, string> = {
   BURSARY_PENDING: 'Bursary pending',
   BURSARY_NOT_CLEARED: 'Bursary not cleared',
@@ -111,6 +142,74 @@ const roleLabels: Record<string, string> = {
   PROVOST: 'Provost',
   ADMIN: 'Admin',
   STUDENT: 'Student',
+};
+
+const surveyValueLabels: Record<string, Record<string, string>> = {
+  immediatePlan: {
+    NYSC: 'NYSC',
+    WORK: 'Work',
+    GRADUATE_DEGREE: 'Graduate Degree',
+    LAW_SCHOOL: 'Law School',
+    OTHER: 'Other',
+  },
+  attendCommencement: {
+    YES: 'Yes',
+    MAYBE: 'Maybe',
+    NO: 'No',
+  },
+  preferVirtualConferral: {
+    YES: 'Yes',
+    MAYBE: 'Maybe',
+    NO: 'No',
+  },
+  attendSeniorWeek: {
+    YES: 'Yes',
+    MAYBE: 'Maybe',
+    NO: 'No',
+  },
+  commencementInfoMethod: {
+    TEXT: 'Text',
+    MAIL: 'Mail (FedEx or NiPost EMS)',
+    EMAIL: 'E-mail',
+    OTHER: 'Other',
+  },
+  guestLodgingPreference: {
+    AUN_HOTEL: 'AUN Hotel',
+    AUN_RESIDENCE_HALLS: 'AUN Residence Halls',
+    SURROUNDING_HOTELS: 'Surrounding Hotels',
+    OTHER: 'Other',
+  },
+  townTransportPlan: {
+    USE_ME: 'Use me',
+    PERSONAL_CAR: 'Personal car',
+    AUN_TRANSPORTATION: 'AUN transportation',
+    OTHER: 'Other',
+  },
+  photoAlbumOpinion: {
+    I_LOVE_IT: 'I love it',
+    INTERESTING: 'Interesting',
+    DONT_LIKE_IDEA: "I don't like the idea",
+    PLEASE_LETS_DO_IT: 'Please let do it',
+  },
+  attendedCommencementBefore: {
+    YES: 'Yes',
+    NO: 'No',
+    WANTED_BUT_OFF_CAMPUS: 'I have always wanted to, but I am never on campus',
+  },
+  commencementOrganizationRating: {
+    VERY_SATISFIED: 'Very Satisfied',
+    SATISFIED: 'Satisfied',
+    NEUTRAL: 'Neutral',
+    UNSATISFIED: 'Unsatisfied',
+    VERY_UNSATISFIED: 'Very Unsatisfied',
+  },
+  participatedPrograms: {
+    MODEL_UN: 'Model UN',
+    STUDY_ABROAD: 'Study Abroad',
+    EMERGING_LEADERS_ACADEMY: 'Emerging Leaders Academy',
+    HULT_PRIZE: 'Hult Prize',
+    OTHER: 'Other',
+  },
 };
 
 const bursaryActionStatuses = new Set(['BURSARY_PENDING', 'BURSARY_NOT_CLEARED']);
@@ -179,10 +278,12 @@ type StaffWorkspaceProps = {
 
 export function StaffWorkspace({ accessToken, onSignOut, user }: StaffWorkspaceProps) {
   const [dashboard, setDashboard] = useState<StaffDashboard | null>(null);
+  const [activeView, setActiveView] = useState<'queue' | 'survey'>('queue');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const isAllowedRole = useMemo(() => staffRoles.includes(user.role as StaffRole), [user.role]);
+  const canOpenSurveyReport = user.role === 'REGISTRY_OFFICER' || user.role === 'ADMIN';
 
   async function loadDashboard() {
     setError(null);
@@ -220,6 +321,12 @@ export function StaffWorkspace({ accessToken, onSignOut, user }: StaffWorkspaceP
     }
   }, [isAllowedRole, accessToken]);
 
+  useEffect(() => {
+    if (!canOpenSurveyReport) {
+      setActiveView('queue');
+    }
+  }, [canOpenSurveyReport]);
+
   if (!isAllowedRole) {
     return (
       <RoleAccessShell onSignOut={onSignOut} user={user}>
@@ -234,7 +341,12 @@ export function StaffWorkspace({ accessToken, onSignOut, user }: StaffWorkspaceP
   }
 
   return (
-    <RoleAccessShell onSignOut={onSignOut} user={user}>
+    <RoleAccessShell
+      onOpenSurvey={canOpenSurveyReport ? () => setActiveView('survey') : undefined}
+      onSignOut={onSignOut}
+      surveyActive={activeView === 'survey'}
+      user={user}
+    >
       {loading ? (
         <div className="flex min-h-[420px] items-center justify-center rounded-lg border border-line bg-white shadow-soft">
           <div className="flex items-center gap-3 text-sm font-medium text-ink">
@@ -247,6 +359,9 @@ export function StaffWorkspace({ accessToken, onSignOut, user }: StaffWorkspaceP
           {error}
         </div>
       ) : dashboard ? (
+        activeView === 'survey' ? (
+          <SurveyReportPage accessToken={accessToken} onBack={() => setActiveView('queue')} />
+        ) : (
         <div className="grid gap-5">
           <section className="rounded-lg border border-line bg-white p-5 shadow-soft">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -276,6 +391,7 @@ export function StaffWorkspace({ accessToken, onSignOut, user }: StaffWorkspaceP
             title="Current Queue"
           />
         </div>
+        )
       ) : null}
     </RoleAccessShell>
   );
@@ -283,11 +399,15 @@ export function StaffWorkspace({ accessToken, onSignOut, user }: StaffWorkspaceP
 
 function RoleAccessShell({
   children,
+  onOpenSurvey,
   onSignOut,
+  surveyActive = false,
   user,
 }: {
   children: ReactNode;
+  onOpenSurvey?: () => void;
   onSignOut: () => void;
+  surveyActive?: boolean;
   user: AuthUser;
 }) {
   return (
@@ -308,6 +428,20 @@ function RoleAccessShell({
             <div className="rounded-pill border border-line bg-white px-3 py-1.5 text-sm text-slate-600">
               {user.email}
             </div>
+            {onOpenSurvey ? (
+              <button
+                className={`inline-flex h-9 items-center gap-2 rounded-pill border px-3 text-sm font-semibold transition ${
+                  surveyActive
+                    ? 'border-spruce bg-spruce text-white'
+                    : 'border-line bg-white text-ink hover:bg-mist'
+                }`}
+                onClick={onOpenSurvey}
+                type="button"
+              >
+                <FileText aria-hidden className="h-4 w-4" />
+                Survey
+              </button>
+            ) : null}
             <button
               className="inline-flex h-9 items-center gap-2 rounded-pill border border-line bg-white px-3 text-sm font-medium text-ink transition hover:bg-mist"
               onClick={onSignOut}
@@ -440,6 +574,290 @@ function ApplicationTable({
         />
       ) : null}
     </section>
+  );
+}
+
+function SurveyReportPage({
+  accessToken,
+  onBack,
+}: {
+  accessToken: string;
+  onBack: () => void;
+}) {
+  const [report, setReport] = useState<StaffSurveyReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedResponse, setSelectedResponse] = useState<StaffSurveyResponse | null>(null);
+
+  async function loadReport() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/survey/report`, {
+        cache: 'no-store',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const body = (await response.json().catch(() => null)) as StaffSurveyReport | { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(body && 'message' in body && body.message ? body.message : 'Unable to load survey responses.');
+      }
+
+      setReport(body as StaffSurveyReport);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Unable to load survey responses.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadReport();
+  }, [accessToken]);
+
+  const aggregates = useMemo(() => (report ? buildSurveyAggregates(report) : []), [report]);
+  const commencementYesCount = countSurveyAnswer(report, 'attendCommencement', 'YES');
+  const seniorWeekYesCount = countSurveyAnswer(report, 'attendSeniorWeek', 'YES');
+
+  return (
+    <div className="grid gap-5">
+      <section className="rounded-lg border border-line bg-white p-5 shadow-soft">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase text-spruce">Registry survey report</p>
+            <h2 className="mt-2 text-2xl font-semibold text-ink">Senior Survey Responses</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              Review submitted senior survey data and export responses for ceremony planning.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink transition hover:bg-mist"
+              onClick={onBack}
+              type="button"
+            >
+              Back to queue
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink transition hover:bg-mist"
+              onClick={() => void loadReport()}
+              type="button"
+            >
+              <RefreshCw aria-hidden className="h-4 w-4" />
+              Refresh
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-spruce px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!report?.responses.length}
+              onClick={() => {
+                if (report) {
+                  downloadSurveyCsv(report);
+                }
+              }}
+              type="button"
+            >
+              <Download aria-hidden className="h-4 w-4" />
+              Download CSV
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {loading ? (
+        <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-line bg-white shadow-soft">
+          <div className="flex items-center gap-3 text-sm font-medium text-ink">
+            <Loader2 aria-hidden className="h-4 w-4 animate-spin text-spruce" />
+            Loading survey responses
+          </div>
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
+          {error}
+        </div>
+      ) : report ? (
+        <>
+          <section className="grid gap-4 md:grid-cols-4">
+            <SurveyMetric label="Total responses" value={String(report.totalResponses)} />
+            <SurveyMetric label="Attending commencement" value={String(commencementYesCount)} />
+            <SurveyMetric label="Attending Senior Week" value={String(seniorWeekYesCount)} />
+            <SurveyMetric label="Generated" value={formatDate(report.generatedAt)} />
+          </section>
+
+          <section className="rounded-lg border border-line bg-white p-5 shadow-soft">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-ink">Choice Summary</h2>
+                <p className="text-sm text-slate-500">Counts for selection-based survey questions.</p>
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-md border border-line">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead className="bg-mist text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-3 font-semibold">Question</th>
+                    <th className="px-3 py-3 font-semibold">Responses</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aggregates.map((item) => (
+                    <tr className="border-t border-line align-top" key={item.key}>
+                      <td className="w-2/5 px-3 py-3 font-medium text-ink">{item.label}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          {item.counts.length ? (
+                            item.counts.map((count) => (
+                              <span
+                                className="rounded-pill border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-900"
+                                key={count.label}
+                              >
+                                {count.label}: {count.count}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-slate-500">No answers yet</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-line bg-white p-5 shadow-soft">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-ink">Individual Responses</h2>
+                <p className="text-sm text-slate-500">Open a student response to read typed answers in full.</p>
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-hidden rounded-md border border-line">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead className="bg-mist text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-3 font-semibold">Student</th>
+                    <th className="px-3 py-3 font-semibold">Major</th>
+                    <th className="px-3 py-3 font-semibold">Term</th>
+                    <th className="px-3 py-3 font-semibold">Submitted</th>
+                    <th className="px-3 py-3 font-semibold">Plan</th>
+                    <th className="px-3 py-3 font-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.responses.map((response) => (
+                    <tr className="border-t border-line" key={response.id}>
+                      <td className="px-3 py-3">
+                        <p className="font-medium text-ink">{response.student.name}</p>
+                        <p className="text-xs text-slate-500">{response.student.id}</p>
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">{response.student.major}</td>
+                      <td className="px-3 py-3 text-slate-700">{response.term}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatDate(response.submittedAt)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatSurveyAnswer('immediatePlan', response.answers.immediatePlan)}</td>
+                      <td className="px-3 py-3">
+                        <button
+                          className="inline-flex h-9 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink transition hover:bg-mist"
+                          onClick={() => setSelectedResponse(response)}
+                          type="button"
+                        >
+                          <FileText aria-hidden className="h-4 w-4" />
+                          View responses
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {report.responses.length === 0 ? (
+                    <tr>
+                      <td className="px-3 py-8 text-center text-slate-500" colSpan={6}>
+                        No submitted survey responses yet.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      ) : null}
+
+      {selectedResponse && report ? (
+        <SurveyResponseModal
+          onClose={() => setSelectedResponse(null)}
+          questions={report.questions}
+          response={selectedResponse}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function SurveyMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4 shadow-soft">
+      <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+      <p className="mt-3 text-xl font-semibold text-ink">{value}</p>
+    </div>
+  );
+}
+
+function SurveyResponseModal({
+  onClose,
+  questions,
+  response,
+}: {
+  onClose: () => void;
+  questions: StaffSurveyQuestion[];
+  response: StaffSurveyResponse;
+}) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-sm sm:p-8"
+      onClick={onClose}
+      role="dialog"
+    >
+      <div className="my-4 w-full max-w-4xl rounded-lg border border-line bg-white shadow-soft" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 border-b border-line p-5">
+          <div>
+            <p className="text-xs font-semibold uppercase text-spruce">Survey response</p>
+            <h2 className="mt-1 text-xl font-semibold text-ink">{response.student.name}</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {response.student.id} • {response.term} • {formatDate(response.submittedAt)}
+            </p>
+          </div>
+          <button
+            aria-label="Close survey response"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white text-ink transition hover:bg-mist"
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          {questions.map((question) => (
+            <div
+              className={`rounded-md border border-line bg-white p-3 ${
+                question.type === 'textarea' ? 'sm:col-span-2' : ''
+              }`}
+              key={question.key}
+            >
+              <p className="text-xs font-semibold uppercase leading-5 text-slate-500">{question.label}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-6 text-ink">
+                {formatSurveyAnswer(question.key, response.answers[question.key])}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1273,6 +1691,96 @@ function ProvostSignoffActions({
       {error ? <p className="rounded-md bg-red-50 p-2 text-xs font-medium text-red-700">{error}</p> : null}
     </div>
   );
+}
+
+function buildSurveyAggregates(report: StaffSurveyReport) {
+  return report.questions
+    .filter((question) => question.type !== 'textarea')
+    .map((question) => {
+      const counts = new Map<string, number>();
+
+      for (const response of report.responses) {
+        const value = response.answers[question.key];
+        const values = Array.isArray(value) ? value : value ? [value] : [];
+
+        for (const item of values) {
+          if (typeof item !== 'string' || !item.trim()) {
+            continue;
+          }
+
+          const label = formatSurveyAnswer(question.key, item);
+          counts.set(label, (counts.get(label) ?? 0) + 1);
+        }
+      }
+
+      return {
+        key: question.key,
+        label: question.label,
+        counts: [...counts.entries()]
+          .map(([label, count]) => ({ label, count }))
+          .sort((first, second) => second.count - first.count || first.label.localeCompare(second.label)),
+      };
+    });
+}
+
+function countSurveyAnswer(report: StaffSurveyReport | null, key: string, targetValue: string) {
+  if (!report) {
+    return 0;
+  }
+
+  return report.responses.filter((response) => {
+    const value = response.answers[key];
+    return Array.isArray(value) ? value.includes(targetValue) : value === targetValue;
+  }).length;
+}
+
+function downloadSurveyCsv(report: StaffSurveyReport) {
+  const headers = [
+    'Student ID',
+    'Student Name',
+    'Major',
+    'Term',
+    'Application Status',
+    'Survey Submitted At',
+    ...report.questions.map((question) => question.label),
+  ];
+
+  const rows = report.responses.map((response) => [
+    response.student.id,
+    response.student.name,
+    response.student.major,
+    response.term,
+    formatStatus(response.status),
+    formatDate(response.submittedAt),
+    ...report.questions.map((question) => formatSurveyAnswer(question.key, response.answers[question.key])),
+  ]);
+
+  const csv = [headers, ...rows].map((row) => row.map(escapeCsvValue).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `graduation-survey-responses-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsvValue(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function formatSurveyAnswer(key: string, value: StaffSurveyAnswerValue) {
+  if (Array.isArray(value)) {
+    return value.length ? value.map((item) => surveyValueLabels[key]?.[item] ?? item).join(', ') : 'Not answered';
+  }
+
+  if (typeof value !== 'string' || !value.trim()) {
+    return 'Not answered';
+  }
+
+  return surveyValueLabels[key]?.[value] ?? value;
 }
 
 function formatStatus(status: string) {
