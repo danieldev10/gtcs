@@ -170,6 +170,11 @@ type DocumentRequirement = {
   upload: UploadedDocument | null;
 };
 
+type ProgressItem = {
+  complete: boolean;
+  label: string;
+};
+
 type DocumentState = {
   applicationId: string;
   requiredComplete: boolean;
@@ -710,13 +715,25 @@ export function DashboardWorkspace({
     };
   }, [reviewOpen]);
 
-  const completionItems = useMemo(() => getCompletionItems(form), [form]);
-  const completedCount = completionItems.filter((item) => item.complete).length;
-  const completionPercent = Math.round((completedCount / completionItems.length) * 100);
-  const profileComplete = completedCount === completionItems.length;
+  const profileCompletionItems = useMemo(() => getCompletionItems(form), [form]);
+  const profileCompletedCount = profileCompletionItems.filter((item) => item.complete).length;
+  const profileComplete = profileCompletedCount === profileCompletionItems.length;
   const applicationComplete = Boolean(application?.formComplete);
   const documentsComplete = Boolean(documents?.requiredComplete);
   const surveyComplete = Boolean(survey?.submittedAt ?? application?.surveySubmitted);
+  const completionItems = useMemo(
+    () =>
+      getApplicationProgressItems({
+        applicationComplete,
+        documents,
+        profileItems: profileCompletionItems,
+        surveyComplete,
+      }),
+    [applicationComplete, documents, profileCompletionItems, surveyComplete],
+  );
+  const completedCount = completionItems.filter((item) => item.complete).length;
+  const completionPercent = Math.round((completedCount / completionItems.length) * 100);
+  const requiredProgressComplete = completedCount === completionItems.length;
   const finalSubmitted = Boolean(application?.submittedAt);
   const statusMeta = getApplicationStatusMeta(application?.status);
 
@@ -1343,10 +1360,10 @@ export function DashboardWorkspace({
                     <h2 className="mt-1 text-3xl font-semibold text-ink">{completionPercent}%</h2>
                   </div>
                   <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-full ${profileComplete ? 'bg-ink text-white' : 'bg-mist text-marigold'
+                    className={`flex h-12 w-12 items-center justify-center rounded-full ${requiredProgressComplete ? 'bg-ink text-white' : 'bg-mist text-marigold'
                       }`}
                   >
-                    {profileComplete ? (
+                    {requiredProgressComplete ? (
                       <CheckCircle2 aria-hidden className="h-6 w-6" />
                     ) : (
                       <CircleAlert aria-hidden className="h-6 w-6" />
@@ -1874,7 +1891,7 @@ function StudentProgress({
   return (
     <section className="rounded-lg border border-line bg-white p-6 shadow-soft">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-marigold">Graduation workspace</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-marigold">Graduation Application</p>
         <h2 className="mt-1 text-2xl font-semibold text-ink">Let&apos;s get you ready to graduate</h2>
         <p className="mt-1 text-sm text-marigold">
           Work through each step in order — your progress saves as you go.
@@ -2583,13 +2600,6 @@ function ReviewSubmitPanel({
       </div>
 
       <div className="grid gap-5 p-5">
-        <div className="grid gap-3 md:grid-cols-4">
-          <StatusCard label="Application" value={application?.formComplete ? 'Ready' : 'Pending'} />
-          <StatusCard label="Documents" value={documents?.requiredComplete ? 'Ready' : 'Pending'} />
-          <StatusCard label="Survey" value={survey?.submittedAt ? 'Submitted' : 'Pending'} />
-          <StatusCard label="Workflow" value={submitted ? getApplicationStatusMeta(application?.status).label : 'Draft'} />
-        </div>
-
         <ReviewSection title="Student Details">
           <ReviewItem label="Student name" value={profile ? `${profile.firstName} ${profile.middleName ?? ''} ${profile.lastName}` : application?.profile.name} />
           <ReviewItem label="AUN Student ID" value={profile?.studentId ?? application?.profile.studentId} />
@@ -2703,15 +2713,6 @@ function ReviewItem({ label, value, wide = false }: { label: string; value?: str
     <div className={`border-b border-line px-4 py-3 last:border-b-0 md:[&:nth-last-child(-n+2)]:border-b-0 ${wide ? 'md:col-span-2' : ''}`}>
       <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
       <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6 text-ink">{value?.trim() || 'Not provided'}</p>
-    </div>
-  );
-}
-
-function StatusCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-line bg-mist p-4">
-      <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
-      <p className="mt-2 text-base font-semibold text-ink">{value}</p>
     </div>
   );
 }
@@ -3410,7 +3411,7 @@ function formatFileSize(sizeBytes: number | null) {
   return `(${(sizeBytes / (1024 * 1024)).toFixed(1)} MB)`;
 }
 
-function getCompletionItems(form: ProfileFormState) {
+function getCompletionItems(form: ProfileFormState): ProgressItem[] {
   return [
     { label: 'Legal names', complete: Boolean(form.firstName.trim() && form.lastName.trim()) },
     { label: 'Phone number', complete: Boolean(form.phone.trim()) },
@@ -3420,6 +3421,35 @@ function getCompletionItems(form: ProfileFormState) {
     { label: 'Current GPA', complete: Boolean(form.currentGpa) },
     { label: 'Mailing address', complete: Boolean(form.shippingAddress.trim()) },
     { label: 'Guardian contact', complete: Boolean(form.parentGuardianName.trim() && form.parentGuardianPhone.trim()) },
+  ];
+}
+
+function getApplicationProgressItems({
+  applicationComplete,
+  documents,
+  profileItems,
+  surveyComplete,
+}: {
+  applicationComplete: boolean;
+  documents: DocumentState | null;
+  profileItems: ProgressItem[];
+  surveyComplete: boolean;
+}): ProgressItem[] {
+  const documentItems =
+    documents?.requiredDocuments.length
+      ? documents.requiredDocuments
+        .filter((document) => document.required)
+        .map((document) => ({
+          complete: document.uploaded,
+          label: document.label,
+        }))
+      : [{ complete: Boolean(documents?.requiredComplete), label: 'Required documents' }];
+
+  return [
+    ...profileItems,
+    { complete: applicationComplete, label: 'Graduation application' },
+    ...documentItems,
+    { complete: surveyComplete, label: 'Senior survey' },
   ];
 }
 
