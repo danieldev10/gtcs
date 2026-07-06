@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --webpack --hostname 127.0.0.1",
     "build": "next build --webpack",
+    "build:web": "next build --webpack",
     "start": "next start",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
